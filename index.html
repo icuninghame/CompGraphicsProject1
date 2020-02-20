@@ -2,21 +2,27 @@
 
 <head>
     <title>Computer Graphics Project 1: Super Bug Zapper</title>
+
     <!-- Custom Javascript Source Files: -->
     <script type="text/javascript" src="game.js"></script>
+    <script type="text/javascript" src="lib/cuon-matrix.js"></script>
+    <script type="text/javascript" src="lib/cuon-utils.js"></script>
+    <script type="text/javascript" src="lib/webgl-debug.js"></script>
+    <script type="text/javascript" src="lib/webgl-utils.js"></script>
 
     <!-- CSS: -->
 
 </head>
 
-<body>
+<body onload="main();">
 
     <div class="container">
 
-        <canvas id="gameCanvas">
-
+        <canvas id="gameCanvas" width="500px" height="500px">
+            Your browser does not appear to support HTML5.
         </canvas>
-
+        <br/>
+        <i>Demo is above this text.</i>
     </div>
 
 </body>
