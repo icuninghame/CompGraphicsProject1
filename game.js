@@ -66,7 +66,23 @@ function main() {
     var modelMatrix = new Matrix4();
 
     // Generate initial locations of bacteria along circumference of dish:
-    var bacteriaVertices = [];
+    var bacteriaVertices = generateBacteriaStartLocations();
+    var bacteriaColors = generateBacteriaColors();
+
+    // Start drawing
+    var tick = function() {
+        currentAngle = animate(currentAngle);  // Update the rotation angle
+        draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaVertices, bacteriaColors);   // Draw the shapes
+        requestAnimationFrame(tick, canvas); // Request that the browser calls tick
+    };
+    tick();
+}
+
+function generateBacteriaStartLocations(){
+
+    var bacteriaVertices = [
+        //x, y
+    ];
     for (var i = 0; i < 10; i++){
         var j = (Math.floor(Math.random() * 360) + 1) * Math.PI / 180;
         var centerX = Math.sin(j).toFixed(2) * DISH_SCALE;
@@ -76,40 +92,8 @@ function main() {
     }
     console.log("Bacteria vertices: " + bacteriaVertices);
 
-    // Start drawing
-    var tick = function() {
-        currentAngle = animate(currentAngle);  // Update the rotation angle
-        draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaVertices);   // Draw the shapes
-        requestAnimationFrame(tick, canvas); // Request that the browser calls tick
-    };
-    tick();
-}
+    return bacteriaVertices;
 
-function generateCircleVertices(){
-    var circleVertices = [
-        // x, y
-    ];
-    // Use a loop to define all the vertices of the circle:
-    for (var i = 0.0; i <= 360; i++){
-        var j = i * Math.PI / 180;
-        // Create a Vertex on Outer Circle Circumference:
-        var vert1 =
-            [
-                Math.sin(j) * 0.9, // x
-                Math.cos(j) * 0.9, // y
-            ];
-        // Create a Vertex on the Center of the Circle:
-        var vert2 =
-            [
-                Math.sin(j) * 0.1,        // x
-                Math.cos(j) * 0.1,        // y
-            ];
-        // Append created vertices to vertex array
-        circleVertices = circleVertices.concat(vert1);
-        circleVertices = circleVertices.concat(vert2);
-        // Repeat 360 times around the circle
-    }
-    return circleVertices;
 }
 
 function generateBacteriaVertices(centerX, centerY){
@@ -139,35 +123,49 @@ function generateBacteriaVertices(centerX, centerY){
     return bVertices;
 }
 
-function generateCircleColors(){
-    var circleColors = [
-        // R, G, B
+function generateBacteriaColors(){
+
+    var bacteriaColors = [];
+    var max = 1.0, min = 0.1;
+
+    for (var i = 0; i < 10; i++) {
+        var redIn = Math.random() * (max - min) + min;
+        var greenIn = Math.random() * (max - min) + min;
+        var blueIn = Math.random() * (max - min) + min;
+        bacteriaColors[i] = generateCircleColors(redIn, greenIn, blueIn);
+    }
+
+    return bacteriaColors;
+}
+
+function generateCircleVertices(){
+    var circleVertices = [
+        // x, y
     ];
-    // Use a loop to define all the colors in the vertices of the circle:
+    // Use a loop to define all the vertices of the circle:
     for (var i = 0.0; i <= 360; i++){
+        var j = i * Math.PI / 180;
         // Create a Vertex on Outer Circle Circumference:
         var vert1 =
             [
-                0.2,           // R
-                0.8,           // G
-                0.2,           // B
+                Math.sin(j) * 0.9, // x
+                Math.cos(j) * 0.9, // y
             ];
         // Create a Vertex on the Center of the Circle:
         var vert2 =
             [
-                0.0,        // R
-                0.0,        // G
-                0.0,        // B
+                Math.sin(j) * 0.1,        // x
+                Math.cos(j) * 0.1,        // y
             ];
         // Append created vertices to vertex array
-        circleColors = circleColors.concat(vert1);
-        circleColors = circleColors.concat(vert2);
+        circleVertices = circleVertices.concat(vert1);
+        circleVertices = circleVertices.concat(vert2);
         // Repeat 360 times around the circle
     }
-    return circleColors;
+    return circleVertices;
 }
 
-function generateBacteriaColors(redIn, greenIn, blueIn){
+function generateCircleColors(redIn, greenIn, blueIn){
     var circleColors = [
         // R, G, B
     ];
@@ -193,6 +191,103 @@ function generateBacteriaColors(redIn, greenIn, blueIn){
         // Repeat 360 times around the circle
     }
     return circleColors;
+}
+
+/**
+ * Main Draw Function.
+ * @param gl
+ * @param currentAngle
+ * @param modelMatrix
+ * @param u_ModelMatrix
+ * @param bacteriaLocations
+ * @param bacteriaColors
+ */
+function draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
+    // Set the rotation matrix
+    modelMatrix.setRotate(currentAngle, 0, 0, 1); // Rotation angle, rotation axis (0, 0, 1)
+
+    // Pass the rotation matrix to the vertex shader
+    gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
+
+    // Clear <canvas>
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Draw the appropriate shapes
+    drawDish(gl);
+    //drawTriangle(gl);
+    // console.log("Center X = " + bacteriaLocations[bCount] + " Center Y = "+ bacteriaLocations[bCount+1]);
+    for (var bCount = 0; bCount < bacteriaLocations.length; bCount+=2){
+        drawBacteria(gl, bacteriaLocations[bCount], bacteriaLocations[bCount+1], bacteriaColors[bCount/2]);
+    }
+
+
+}
+
+function drawTriangle(gl){
+
+    var triangleVertices = [
+        //x, y
+        0.5, 1.0,
+        0.0, 0.0,
+        1.0, 0.0
+    ];
+    var triangleColors = [
+        // R, G, B
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0
+    ];
+    let n = initVertexBuffers(gl, triangleVertices, triangleVertices.count / VERTEX_DIMENSIONS);
+    let m = initColorBuffers(gl, triangleColors, triangleColors.count / COLOUR_DIMENSIONS);
+    if (n < 0 || m < 0) {
+        console.log('Failed to set the positions or colors of the vertices for the triangle.');
+        return;
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+}
+
+function drawBacteria(gl, centerX, centerY, colorArray){
+    var bVertices = generateBacteriaVertices(centerX, centerY);
+    var bColors = colorArray; // Returns an array containing an array for each bacteria
+    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
+    let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
+    let m = initColorBuffers(gl, bColors, bColors.length / COLOUR_DIMENSIONS);
+    if (n < 0 || m < 0) {
+        console.log('Failed to set the positions or colors of the vertices for the circle.');
+        return;
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, bVertices.length / VERTEX_DIMENSIONS);
+
+}
+
+function drawDish(gl){
+
+    var circleVertices = generateCircleVertices();
+    var circleColors = generateCircleColors(0.2, 0.8, 0.2);
+    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
+    let n = initVertexBuffers(gl, circleVertices, circleVertices.length / VERTEX_DIMENSIONS);
+    let m = initColorBuffers(gl, circleColors, circleColors.length / COLOUR_DIMENSIONS);
+    if (n < 0 || m < 0) {
+        console.log('Failed to set the positions or colors of the vertices for the circle.');
+        return;
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, circleVertices.length / VERTEX_DIMENSIONS);
+
+
+}
+
+// Last time that this function was called
+var g_last = Date.now();
+function animate(angle) {
+    // Calculate the elapsed time
+    var now = Date.now();
+    var elapsed = now - g_last;
+    g_last = now;
+    // Update the current rotation angle (adjusted by the elapsed time)
+    var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+    return newAngle %= 360;
 }
 
 function initVertexBuffers(gl, vertexArray, numVertices) {
@@ -254,96 +349,4 @@ function initColorBuffers(gl, colorArray, numVertices){
     gl.enableVertexAttribArray(a_Color);
 
     return n;
-}
-
-/**
- * Main Draw Function.
- * @param gl
- * @param currentAngle
- * @param modelMatrix
- * @param u_ModelMatrix
- */
-function draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaLocations) {
-    // Set the rotation matrix
-    modelMatrix.setRotate(currentAngle, 0, 0, 1); // Rotation angle, rotation axis (0, 0, 1)
-
-    // Pass the rotation matrix to the vertex shader
-    gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
-
-    // Clear <canvas>
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // Draw the appropriate shapes
-    drawDish(gl);
-    drawTriangle(gl);
-    console.log("Center X = " + bacteriaLocations[0] + " Center Y = "+ bacteriaLocations[1]);
-    drawBacteria(gl, bacteriaLocations[0], bacteriaLocations[1]);
-
-}
-
-function drawTriangle(gl){
-
-    var triangleVertices = [
-        //x, y
-        0.5, 1.0,
-        0.0, 0.0,
-        1.0, 0.0
-    ];
-    var triangleColors = [
-        // R, G, B
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0
-    ];
-    let n = initVertexBuffers(gl, triangleVertices, triangleVertices.count / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, triangleColors, triangleColors.count / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the triangle.');
-        return;
-    }
-
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-}
-
-function drawBacteria(gl, centerX, centerY){
-    var bVertices = generateBacteriaVertices(centerX, centerY);
-    var bColors = generateBacteriaColors(1.0, 0.2, 0.2);
-    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
-    let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, bColors, bColors.length / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the circle.');
-        return;
-    }
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, bVertices.length / VERTEX_DIMENSIONS);
-
-}
-
-function drawDish(gl){
-
-    var circleVertices = generateCircleVertices();
-    var circleColors = generateCircleColors();
-    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
-    let n = initVertexBuffers(gl, circleVertices, circleVertices.length / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, circleColors, circleColors.length / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the circle.');
-        return;
-    }
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, circleVertices.length / VERTEX_DIMENSIONS);
-
-
-}
-
-// Last time that this function was called
-var g_last = Date.now();
-function animate(angle) {
-    // Calculate the elapsed time
-    var now = Date.now();
-    var elapsed = now - g_last;
-    g_last = now;
-    // Update the current rotation angle (adjusted by the elapsed time)
-    var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
-    return newAngle %= 360;
 }
