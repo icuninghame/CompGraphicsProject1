@@ -23,8 +23,8 @@ const FSHADER_SOURCE = [
     '}'
 ].join('\n');
 
-// Rotation angle (degrees/second)
-var ANGLE_STEP = 0.0;
+// Scale Step (factor per second bacteria will grow: currentSizeOfCircle * (1 + SCALE_STEP)
+var SCALE_STEP = 0.1;
 
 // Dimensions for the WebGL canvas
 const VERTEX_DIMENSIONS = 2; // x, y
@@ -32,6 +32,9 @@ const COLOUR_DIMENSIONS = 3; // R, G, B
 
 // Scale of the background dish relative to the canvas
 const DISH_SCALE = 0.9; // 90% of canvas width/height
+
+// Global Variable to keep track of player score
+var playerScore = 0.0;
 
 function main() {
     // Retrieve <canvas> element
@@ -96,7 +99,7 @@ function generateBacteriaStartLocations(){
 
 }
 
-function generateBacteriaVertices(centerX, centerY){
+function generateBacteriaVertices(centerX, centerY, scale){
     var bVertices = [
         // x, y
     ];
@@ -106,8 +109,8 @@ function generateBacteriaVertices(centerX, centerY){
         // Create a Vertex on Outer Circle Circumference:
         var vert1 =
             [
-                Math.sin(j) * 0.2 + centerX, // x
-                Math.cos(j) * 0.2 + centerY, // y
+                Math.sin(j) * scale + centerX, // x
+                Math.cos(j) * scale + centerY, // y
             ];
         // Create a Vertex on the Center of the Circle:
         var vert2 =
@@ -129,7 +132,7 @@ function generateBacteriaColors(){
     var max = 1.0, min = 0.1;
 
     for (var i = 0; i < 10; i++) {
-        var redIn = Math.random() * (max - min) + min;
+        var redIn = Math.random() * (max - 0.5) + 0.5;
         var greenIn = Math.random() * (max - min) + min;
         var blueIn = Math.random() * (max - min) + min;
         bacteriaColors[i] = generateCircleColors(redIn, greenIn, blueIn);
@@ -196,15 +199,17 @@ function generateCircleColors(redIn, greenIn, blueIn){
 /**
  * Main Draw Function.
  * @param gl
- * @param currentAngle
+ * @param currentSize
  * @param modelMatrix
  * @param u_ModelMatrix
  * @param bacteriaLocations
  * @param bacteriaColors
  */
-function draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
-    // Set the rotation matrix
-    modelMatrix.setRotate(currentAngle, 0, 0, 1); // Rotation angle, rotation axis (0, 0, 1)
+function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
+    // Set the scale matrix
+    //modelMatrix.setScale(currentSize, currentSize, 1); // Rotation angle, rotation axis (0, 0, 1)
+    // Adjust the scale of the bacteria every time the function is called:
+    var scale = currentSize;
 
     // Pass the rotation matrix to the vertex shader
     gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
@@ -217,7 +222,7 @@ function draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaLocations, b
     //drawTriangle(gl);
     // console.log("Center X = " + bacteriaLocations[bCount] + " Center Y = "+ bacteriaLocations[bCount+1]);
     for (var bCount = 0; bCount < bacteriaLocations.length; bCount+=2){
-        drawBacteria(gl, bacteriaLocations[bCount], bacteriaLocations[bCount+1], bacteriaColors[bCount/2]);
+        drawBacteria(gl, bacteriaLocations[bCount], bacteriaLocations[bCount+1], bacteriaColors[bCount/2], scale);
     }
 
 
@@ -248,8 +253,8 @@ function drawTriangle(gl){
 
 }
 
-function drawBacteria(gl, centerX, centerY, colorArray){
-    var bVertices = generateBacteriaVertices(centerX, centerY);
+function drawBacteria(gl, centerX, centerY, colorArray, scale){
+    var bVertices = generateBacteriaVertices(centerX, centerY, scale);
     var bColors = colorArray; // Returns an array containing an array for each bacteria
     //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
     let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
@@ -286,7 +291,10 @@ function animate(angle) {
     var elapsed = now - g_last;
     g_last = now;
     // Update the current rotation angle (adjusted by the elapsed time)
-    var newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0;
+    var newAngle = angle + (SCALE_STEP * elapsed) / 1000.0;
+    // Update the score:
+    playerScore += elapsed / 100;
+    document.getElementById("score").innerHTML = (playerScore).toFixed(0);
     return newAngle %= 360;
 }
 
