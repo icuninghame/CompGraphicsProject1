@@ -37,6 +37,11 @@ const DISH_SCALE = 0.90; // 90% of canvas width/height
 var playerScore = 0.0;
 var gamePaused = false;
 var gameLost = false;
+var bacteriaCenters = [];
+var currentBacteriaSize = 0.0; //Distance from center of bacteria to edge (ie. the radius)
+// Set the current starting scale factor for the bacteria
+var currentScale = 0.05;
+
 
 function main() {
     // Retrieve <canvas> element
@@ -65,21 +70,18 @@ function main() {
         return;
     }
 
-    // Set the current starting scale factor for the bacteria
-    var currentScale = 0.05;
-
     // Model matrix
     var modelMatrix = new Matrix4();
 
     // Generate initial locations of bacteria along circumference of dish:
-    var bacteriaVertices = generateBacteriaStartLocations();
+    bacteriaCenters = generateBacteriaStartLocations();
     var bacteriaColors = generateBacteriaColors();
 
     // Define the Main Game Loop:
     function tick() {
         if(!gamePaused){
             currentScale = animate(currentScale);  // Update the bacteria scale
-            draw(gl, currentScale, modelMatrix, u_ModelMatrix, bacteriaVertices, bacteriaColors);   // Draw the shapes
+            draw(gl, currentScale, modelMatrix, u_ModelMatrix, bacteriaCenters, bacteriaColors);   // Draw the shapes
         }
         requestAnimationFrame(tick, canvas); // Request that the browser calls tick
     }
@@ -96,19 +98,19 @@ function main() {
  */
 function generateBacteriaStartLocations(){
 
-    var bacteriaVertices = [
+    var bacteriaCenters = [
         //x, y
     ];
     for (var i = 0; i < 10; i++){
         var j = (Math.floor(Math.random() * 360) + 1) * Math.PI / 180;
         var centerX = Math.sin(j).toFixed(2) * DISH_SCALE;
         var centerY = Math.cos(j).toFixed(2) * DISH_SCALE;
-        bacteriaVertices = bacteriaVertices.concat(centerX);
-        bacteriaVertices = bacteriaVertices.concat(centerY);
+        bacteriaCenters = bacteriaCenters.concat(centerX);
+        bacteriaCenters = bacteriaCenters.concat(centerY);
     }
-    console.log("Bacteria vertices: " + bacteriaVertices);
+    console.log("Bacteria center vertices: " + bacteriaCenters);
 
-    return bacteriaVertices;
+    return bacteriaCenters;
 
 }
 
@@ -143,6 +145,10 @@ function generateBacteriaVertices(centerX, centerY, scale){
         bVertices = bVertices.concat(vert2);
         // Repeat 360 times to form a circle
     }
+    // Calculate and keep track of the current radius of the bacteria (important for click testing):
+    currentBacteriaSize = Math.abs(centerY - bVertices[1]);
+    //console.log("Current bacteria radius = "  + currentBacteriaSize);
+
     return bVertices;
 }
 
@@ -321,6 +327,7 @@ function animate(size) {
     playerScore += newSize;
     document.getElementById("score").innerHTML = (playerScore).toFixed(0);
     return (newSize %= 360);
+
 }
 
 /**
@@ -349,7 +356,7 @@ function initVertexBuffers(gl, vertexArray, numVertices) {
 
     // Assign the buffer object to a_Position variable
     var a_Position = gl.getAttribLocation(gl.program, 'a_Position');
-    //var a_Color = gl.getAttribLocation(gl.program, 'a_Color');
+    //var a_Color = gl.getAttribLocation(gl.program, 'a_Color');f
     if(a_Position < 0) {
         console.log('Failed to get the storage location of a_Position or a_Color');
         return -1;
@@ -418,6 +425,29 @@ function togglePause(){
  * @param e     The MouseEvent that stores data about where the user has clicked among other things
  */
 function clickHandler(e){
-    var cx, cy;
-    console.log("Canvas was clicked. X = " + e.clientX + " Y = " + e.clientY);
+    let canvas = document.getElementById('gameCanvas');
+    let rect = canvas.getBoundingClientRect();
+    // Scale the mouse event (which gives raw pixel count depending on canvas size) to the [-1, 1] coordinate space of the webgl context:
+    var cx = (e.clientX - rect.left) / canvas.clientWidth * 2 - 1;
+    var cy = (e.clientY - rect.top) / canvas.clientHeight * (-2) + 1;
+    console.log("Canvas was clicked. X = " + cx.toFixed(2) + " Y = " + cy.toFixed(2));
+
+    // Loop through all bacteria centers' X values:
+    for (var i = 0; i < 20; i+=2){
+
+        // If clicked in center of a bacteria:
+        if (bacteriaCenters[i].toFixed(1) === cx.toFixed(1)){
+            if (bacteriaCenters[i+1].toFixed(1) === cy.toFixed(1)){
+                console.log("Bacteria Center Hit!");
+            }
+        }
+
+        // If clicked within the circle of the bacteria:
+        // (Uses formula for checking whether a point lies within a circle: https://math.stackexchange.com/questions/198764/how-to-know-if-a-point-is-inside-a-circle
+        if(Math.sqrt(Math.pow(Math.abs(cx - bacteriaCenters[i]), 2) + Math.pow(Math.abs(cy - bacteriaCenters[i+1]), 2)) < currentBacteriaSize){
+            console.log("Bacteria Hit!");
+        }
+
+    }
+
 }
