@@ -24,24 +24,26 @@ const FSHADER_SOURCE = [
 ].join('\n');
 
 // Scale Step (factor per second bacteria will grow: currentSizeOfCircle * (1 + SCALE_STEP)
-var SCALE_STEP = 0.1;
+var SCALE_STEP = 0.01;
 
-// Dimensions for the WebGL canvas
+// Dimensions for the shapes drawn on the WebGL canvas
 const VERTEX_DIMENSIONS = 2; // x, y
 const COLOUR_DIMENSIONS = 3; // R, G, B
 
 // Scale of the background dish relative to the canvas
-const DISH_SCALE = 0.9; // 90% of canvas width/height
+const DISH_SCALE = 0.90; // 90% of canvas width/height
 
-// Global Variable to keep track of player score
+// Global Variables to keep track of player score & game state
 var playerScore = 0.0;
+var gamePaused = false;
+var gameLost = false;
 
 function main() {
     // Retrieve <canvas> element
-    var canvas = document.getElementById('gameCanvas');
+    let canvas = document.getElementById('gameCanvas');
 
     // Get the rendering context for WebGL
-    var gl = getWebGLContext(canvas);
+    let gl = getWebGLContext(canvas);
     if (!gl) {
         console.log('Failed to get the rendering context for WebGL');
         return;
@@ -63,8 +65,9 @@ function main() {
         return;
     }
 
-    // Current rotation angle
-    var currentAngle = 0.0;
+    // Set the current starting scale factor for the bacteria
+    var currentScale = 0.05;
+
     // Model matrix
     var modelMatrix = new Matrix4();
 
@@ -72,15 +75,25 @@ function main() {
     var bacteriaVertices = generateBacteriaStartLocations();
     var bacteriaColors = generateBacteriaColors();
 
-    // Start drawing
-    var tick = function() {
-        currentAngle = animate(currentAngle);  // Update the rotation angle
-        draw(gl, currentAngle, modelMatrix, u_ModelMatrix, bacteriaVertices, bacteriaColors);   // Draw the shapes
+    // Define the Main Game Loop:
+    function tick() {
+        if(!gamePaused){
+            currentScale = animate(currentScale);  // Update the bacteria scale
+            draw(gl, currentScale, modelMatrix, u_ModelMatrix, bacteriaVertices, bacteriaColors);   // Draw the shapes
+        }
         requestAnimationFrame(tick, canvas); // Request that the browser calls tick
-    };
+    }
+    //Start drawing
     tick();
+
 }
 
+
+/**
+ * Utility function to determine the start locations for the bacteria.
+ * @returns {[]}        An array of vertices in the form x1, y1, x2, y2, ... xn, yn where each x and y are along the
+ *                      circumference of the back dish.
+ */
 function generateBacteriaStartLocations(){
 
     var bacteriaVertices = [
@@ -99,6 +112,13 @@ function generateBacteriaStartLocations(){
 
 }
 
+/**
+ * Utility function to generate the vertex locations for a bacteria.
+ * @param centerX       The center X position of the bacteria. This should be somewhere on the dish circumference.
+ * @param centerY       The center y position of the bacteria. This should also be on the dish circumference.
+ * @param scale         The current scale of the bacteria; the factor to multiply the points by.
+ * @returns {[]}
+ */
 function generateBacteriaVertices(centerX, centerY, scale){
     var bVertices = [
         // x, y
@@ -141,6 +161,12 @@ function generateBacteriaColors(){
     return bacteriaColors;
 }
 
+
+/**
+ * Utility function to generate the all vertices of a circle. The circle will be drawn using TRIANGLE_STRIP, and so many
+ * triangle vertices are required to form a circle. (We use 360 individual triangles)
+ * @returns {[]}
+ */
 function generateCircleVertices(){
     var circleVertices = [
         // x, y
@@ -168,6 +194,13 @@ function generateCircleVertices(){
     return circleVertices;
 }
 
+/**
+ * Utility function to generate colours for a circle's vertices to be used in the fragment shader
+ * @param redIn         The Red value of the input colour [0.0 - 1.0]
+ * @param greenIn       The Green value of the input colour [0.0 - 1.0]
+ * @param blueIn        The Blue value of the input colour [0.0 - 1.0]
+ * @returns {[]}        An array of colours in the form R1, G1, B1, R2, G2, B2, ... Rn, Gn, Bn
+ */
 function generateCircleColors(redIn, greenIn, blueIn){
     var circleColors = [
         // R, G, B
@@ -177,7 +210,7 @@ function generateCircleColors(redIn, greenIn, blueIn){
         // Create a Vertex on Outer Circle Circumference:
         var vert1 =
             [
-                redIn,           // R
+                redIn,              // R
                 greenIn,           // G
                 blueIn,           // B
             ];
@@ -188,7 +221,7 @@ function generateCircleColors(redIn, greenIn, blueIn){
                 0.0,        // G
                 0.0,        // B
             ];
-        // Append created vertices to vertex array
+        // Append created colour vertices to colour vertex array
         circleColors = circleColors.concat(vert1);
         circleColors = circleColors.concat(vert2);
         // Repeat 360 times around the circle
@@ -206,8 +239,6 @@ function generateCircleColors(redIn, greenIn, blueIn){
  * @param bacteriaColors
  */
 function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
-    // Set the scale matrix
-    //modelMatrix.setScale(currentSize, currentSize, 1); // Rotation angle, rotation axis (0, 0, 1)
     // Adjust the scale of the bacteria every time the function is called:
     var scale = currentSize;
 
@@ -219,8 +250,6 @@ function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, ba
 
     // Draw the appropriate shapes
     drawDish(gl);
-    //drawTriangle(gl);
-    // console.log("Center X = " + bacteriaLocations[bCount] + " Center Y = "+ bacteriaLocations[bCount+1]);
     for (var bCount = 0; bCount < bacteriaLocations.length; bCount+=2){
         drawBacteria(gl, bacteriaLocations[bCount], bacteriaLocations[bCount+1], bacteriaColors[bCount/2], scale);
     }
@@ -228,47 +257,35 @@ function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, ba
 
 }
 
-function drawTriangle(gl){
-
-    var triangleVertices = [
-        //x, y
-        0.5, 1.0,
-        0.0, 0.0,
-        1.0, 0.0
-    ];
-    var triangleColors = [
-        // R, G, B
-        1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0
-    ];
-    let n = initVertexBuffers(gl, triangleVertices, triangleVertices.count / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, triangleColors, triangleColors.count / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the triangle.');
-        return;
-    }
-
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-}
-
+/**
+ * Function for the drawing of bacteria.
+ * @param gl            The WebGL context
+ * @param centerX       The center X position of the bacteria being drawn (this should be on the circumference of the back dish)
+ * @param centerY       The center y position of the bacteria being drawn (this should also be on the circumference of the dish)
+ * @param colorArray    The array of colours
+ * @param scale
+ */
 function drawBacteria(gl, centerX, centerY, colorArray, scale){
+    // Generate colours from the input and vertex locations from generateBacteriaVertices():
     var bVertices = generateBacteriaVertices(centerX, centerY, scale);
-    var bColors = colorArray; // Returns an array containing an array for each bacteria
+    var bColors = colorArray; // An array of nested arrays storing colours for each bacteria
     //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
+
+    // Initialize the buffers to prepare for drawing:
     let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
     let m = initColorBuffers(gl, bColors, bColors.length / COLOUR_DIMENSIONS);
     if (n < 0 || m < 0) {
         console.log('Failed to set the positions or colors of the vertices for the circle.');
         return;
     }
+
+    // Draw the bacteria to the screen:
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, bVertices.length / VERTEX_DIMENSIONS);
 
 }
 
 function drawDish(gl){
-
+    // Generate colours and vertices from the generateCircle*() utility functions:
     var circleVertices = generateCircleVertices();
     var circleColors = generateCircleColors(0.2, 0.8, 0.2);
     //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
@@ -278,6 +295,8 @@ function drawDish(gl){
         console.log('Failed to set the positions or colors of the vertices for the circle.');
         return;
     }
+
+    // Draw the dish to the screen:
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, circleVertices.length / VERTEX_DIMENSIONS);
 
 
@@ -285,18 +304,32 @@ function drawDish(gl){
 
 // Last time that this function was called
 var g_last = Date.now();
-function animate(angle) {
+
+/**
+ * Utility function which is called each tick to animate the growth of the bacteria.
+ * @param size          The current size of the bacteria
+ * @returns {number}
+ */
+function animate(size) {
     // Calculate the elapsed time
     var now = Date.now();
     var elapsed = now - g_last;
     g_last = now;
-    // Update the current rotation angle (adjusted by the elapsed time)
-    var newAngle = angle + (SCALE_STEP * elapsed) / 1000.0;
-    // Update the score:
-    playerScore += elapsed / 100;
+    // Update the current scale of the bacteria (adjusted by the elapsed time)
+    var newSize = size + (SCALE_STEP * elapsed) / 1000.0;
+    // Update the score (adjusted by the elapsed time):
+    playerScore += newSize;
     document.getElementById("score").innerHTML = (playerScore).toFixed(0);
-    return newAngle %= 360;
+    return (newSize %= 360);
 }
+
+/**
+ * Utility function to initialize th vertex buffers needed to draw any shapes.
+ * @param gl            The WebGL context
+ * @param vertexArray   The array of vertices to be fed into the buffer
+ * @param numVertices   The total number of vertices being fed into the buffer
+ * @returns {number|*}
+ */
 
 function initVertexBuffers(gl, vertexArray, numVertices) {
     var vertices = new Float32Array(vertexArray);
@@ -329,6 +362,14 @@ function initVertexBuffers(gl, vertexArray, numVertices) {
     return n;
 }
 
+/**
+ * Utility function to initialize the colour buffers needed to define colours for vertices of shapes.
+ * @param gl            The WebGL context
+ * @param colorArray    The array of colours in the form R1, G1, B1, R2, G2, B2, ..., Rn, Gn, Bn.
+ * @param numVertices   The total number of colour vertices being fed into the buffer
+ * @returns {number|*}
+ */
+
 function initColorBuffers(gl, colorArray, numVertices){
     var colors = new Float32Array(colorArray);
     var n = numVertices;   // The number of vertices
@@ -357,4 +398,26 @@ function initColorBuffers(gl, colorArray, numVertices){
     gl.enableVertexAttribArray(a_Color);
 
     return n;
+}
+/**
+ * Function to change the game state: whether the game is paused or not.
+ */
+function togglePause(){
+    if (gamePaused){
+        gamePaused = false;
+        document.getElementById("pauseBtn").innerHTML = "Pause";
+    }else{
+        gamePaused = true;
+        document.getElementById("pauseBtn").innerHTML = "Play";
+    }
+    console.log("Game Pause Toggled.");
+}
+
+/**
+ * Function for handling mouse clicks by the player.
+ * @param e     The MouseEvent that stores data about where the user has clicked among other things
+ */
+function clickHandler(e){
+    var cx, cy;
+    console.log("Canvas was clicked. X = " + e.clientX + " Y = " + e.clientY);
 }

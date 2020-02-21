@@ -18,13 +18,16 @@
 
     <div class="container">
 
-        <canvas id="gameCanvas" width="500px" height="500px">
+        <canvas onclick="clickHandler(e);" id="gameCanvas" width="500px" height="500px">
             Your browser does not appear to support HTML5.
         </canvas>
-        <br/>
-        <b>Score: </b><i id="score"></i>
+        <br /><br />
+        <button onclick="togglePause();" id="pauseBtn" class="btn btn-primary">Pause</button>
+        &emsp;&emsp;
+        <button onclick="window.location.reload();" id="rstBtn" class="btn btn-primary">Restart</button>
+        &emsp;&emsp;
+        <b>Bacteria Size: </b><i id="score"></i><i>&mu;m</i>
         <br />
-        <i>Demo is above this text.</i>
     </div>
 
 </body>
