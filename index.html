@@ -12,22 +12,31 @@
 
     <!-- CSS: -->
 
+
 </head>
 
-<body onload="main();">
+<body onload="init();">
 
-    <div class="container">
+    <div id="gameWrapper" class="container">
 
-        <canvas onclick="clickHandler(event);" id="gameCanvas" width="500px" height="500px">
+        <p>
+            <b>Instructions: </b>
+            Destroy all the bacteria by clicking on them. <br /> Watch out: if <b>any</b> bacteria reach <b>200&mu;m</b>, they will become too strong for your
+            poison to stop!
+        </p>
+        <canvas id="gameCanvas" onclick="clickHandler(event);" width="500px" height="500px">
             Your browser does not appear to support HTML5.
         </canvas>
-        <br /><br />
+        <br />
+        <b id="gameMessage"></b>
+        <br />
         <button onclick="togglePause();" id="pauseBtn" class="btn btn-primary">Pause</button>
         &emsp;&emsp;
         <button onclick="window.location.reload();" id="rstBtn" class="btn btn-primary">Restart</button>
         &emsp;&emsp;
         <b>Bacteria Size: </b><i id="score"></i><i>&mu;m</i>
         <br />
+
     </div>
 
 </body>

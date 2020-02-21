@@ -23,28 +23,29 @@ const FSHADER_SOURCE = [
     '}'
 ].join('\n');
 
-// Scale Step (factor per second bacteria will grow: currentSizeOfCircle * (1 + SCALE_STEP)
-var SCALE_STEP = 0.01;
+// Constant Game Settings:
+const SCALE_STEP = 0.03;        // Scale Step (factor per second bacteria will grow: currentSizeOfBacteria * (1 + SCALE_STEP)
+const PLAYER_LOSS_SCORE = 200;  // When the score reaches this number, the player loses. (This number represents bacteria size)
 
 // Dimensions for the shapes drawn on the WebGL canvas
-const VERTEX_DIMENSIONS = 2; // x, y
-const COLOUR_DIMENSIONS = 3; // R, G, B
-
-// Scale of the background dish relative to the canvas
-const DISH_SCALE = 0.90; // 90% of canvas width/height
+const VERTEX_DIMENSIONS = 2;    // x, y
+const COLOUR_DIMENSIONS = 3;    // R, G, B
+const DISH_SCALE = 0.90;        // Scale of the background dish relative to the canvas
 
 // Global Variables to keep track of player score & game state
-var playerScore = 0.0;
-var gamePaused = false;
-var gameLost = false;
-var bacteriaCenters = [];
-var bacteriaVisibility = []; //Index will be set to false if the bacteria is not visible
-var currentBacteriaSize = 0.0; //Distance from center of bacteria to edge (ie. the radius)
-// Set the current starting scale factor for the bacteria
-var currentScale = 0.05;
+var playerScore = 0.0;          // Player score, shown on the user's screen as "Bacteria Size"
+var gamePaused = false;         // Set to true if the game has been paused.
+var gameWon = false;            // Set to true if the game has been won (destroyed all bacteria in time)
+var gameLost = false;           // Set to true if the game has been lost (bacteria grows beyond a threshold)
+var bacteriaCenters = [];       // Array to store the center X and Y positions of each bacteria (in the form x1, y1, x2, y2, ... , xn, yn)
+var bacteriaVisibility = [];    // Index will be set to false if the bacteria is not visible
+var currentBacteriaSize = 0.0;  // Distance from center of bacteria to edge (ie. the radius)
+var currentScale = 0.01;        // The starting scale factor for the bacteria, updated on each frame
 
-
-function main() {
+/**
+ * Init Function: initializes the game and begins the main loop.
+ */
+function init() {
     // Retrieve <canvas> element
     let canvas = document.getElementById('gameCanvas');
 
@@ -84,22 +85,131 @@ function main() {
 
     console.log(bacteriaVisibility);
 
-    // Define the Main Game Loop:
+    /**
+     * The Main Game Loop: this is called every frame via requestAnimationFrame();
+     */
     function tick() {
-        if(!gamePaused){
-            currentScale = animate(currentScale);  // Update the bacteria scale
-            draw(gl, currentScale, modelMatrix, u_ModelMatrix, bacteriaCenters, bacteriaColors);   // Draw the shapes
+        if(!gamePaused && !gameWon && !gameLost){   // As long as the game is in a "playing" state:
+            currentScale = animate(currentScale);  // Animate the bacteria growth
+            draw(gl, currentScale, modelMatrix, u_ModelMatrix, bacteriaCenters, bacteriaColors);   // Draw all the shapes
         }
-        requestAnimationFrame(tick, canvas); // Request that the browser calls tick
+        checkWinStatus();                          // Check if the player has won
+        checkLossStatus();                         // Check if the player has lost
+        if (!gameWon && !gameLost)                 // If neither, continue the game loop:
+            requestAnimationFrame(tick, canvas);   //   Request that the browser calls tick
+        else                                       // Otherwise:
+            gl.clear(gl.COLOR_BUFFER_BIT);         //   Clear the game canvas of all elements and end the loop.
     }
-    //Start drawing
+    //Start the main loop
     tick();
+
+}
+
+/**
+ * Main Draw Function.
+ * @param gl                    The WebGL context
+ * @param currentSize           The current scale of the bacteria.
+ * @param modelMatrix           The WebGL program's model matrix (currently unused)
+ * @param u_ModelMatrix         The Vertex Shader's Uniform Model Matrix attribute (currently unused)
+ * @param bacteriaLocations     An Array containing bacteria vertex locations
+ * @param bacteriaColors        An Array containing bacteria vertex colours
+ */
+function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
+    // Adjust the scale of the bacteria every time the function is called:
+    var scale = currentSize;
+
+    // Pass the rotation matrix to the vertex shader
+    gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
+
+    // Clear <canvas>
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Draw the appropriate shapes
+    drawDish(gl);
+    for (var i = 0; i < bacteriaLocations.length; i+=2){
+        if (bacteriaVisibility[i / 2] === true)
+            drawBacteria(gl, bacteriaLocations[i], bacteriaLocations[i+1], bacteriaColors[i/2], scale);
+
+    }
+
+
+}
+
+/**
+ * Function for the drawing of bacteria.
+ * @param gl            The WebGL context
+ * @param centerX       The center X position of the bacteria being drawn (this should be on the circumference of the back dish)
+ * @param centerY       The center y position of the bacteria being drawn (this should also be on the circumference of the dish)
+ * @param colorArray    The array of colours
+ * @param scale         The current scale of the bacteria
+ */
+function drawBacteria(gl, centerX, centerY, colorArray, scale){
+
+    // Generate colours from the input and vertex locations from generateBacteriaVertices():
+    var bVertices = generateBacteriaVertices(centerX, centerY, scale);
+    var bColors = colorArray; // An array of nested arrays storing colours for each bacteria
+    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
+
+    // Initialize the buffers to prepare for drawing:
+    let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
+    let m = initColorBuffers(gl, bColors, bColors.length / COLOUR_DIMENSIONS);
+    if (n < 0 || m < 0) {
+        console.log('Failed to set the positions or colors of the vertices for the circle.');
+        return;
+    }
+
+    // Draw the bacteria to the screen:
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, bVertices.length / VERTEX_DIMENSIONS);
+
+}
+
+/**
+ * Function to draw the background dish.
+ * @param gl        The WebGL context
+ */
+function drawDish(gl){
+    // Generate colours and vertices from the generateCircle*() utility functions:
+    var circleVertices = generateCircleVertices();
+    var circleColors = generateCircleColors(0.2, 0.8, 0.2);
+    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
+    let n = initVertexBuffers(gl, circleVertices, circleVertices.length / VERTEX_DIMENSIONS);
+    let m = initColorBuffers(gl, circleColors, circleColors.length / COLOUR_DIMENSIONS);
+    if (n < 0 || m < 0) {
+        console.log('Failed to set the positions or colors of the vertices for the circle.');
+        return;
+    }
+
+    // Draw the dish to the screen:
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, circleVertices.length / VERTEX_DIMENSIONS);
+
+
+}
+
+// Last time that this function was called
+var g_last = Date.now();
+
+/**
+ * Utility function which is called each tick to animate the growth of the bacteria.
+ * @param size          The current size of the bacteria
+ * @returns {number}
+ */
+function animate(size) {
+    // Calculate the elapsed time
+    var now = Date.now();
+    var elapsed = now - g_last;
+    g_last = now;
+    // Update the current scale of the bacteria (adjusted by the elapsed time)
+    var newSize = size + (SCALE_STEP * elapsed) / 1000.0;
+    // Update the score (adjusted by the elapsed time):
+    playerScore += newSize;
+    document.getElementById("score").innerHTML = (playerScore).toFixed(0);
+    return (newSize %= 360);
 
 }
 
 
 /**
- * Utility function to determine the start locations for the bacteria.
+ * Utility function to determine the start locations for each of the bacteria.
  * @returns {[]}        An array of vertices in the form x1, y1, x2, y2, ... xn, yn where each x and y are along the
  *                      circumference of the back dish.
  */
@@ -159,6 +269,12 @@ function generateBacteriaVertices(centerX, centerY, scale){
     return bVertices;
 }
 
+/**
+ * Function to generate the colours for each of the vertices of a bacteria. We use Math.random() to choose pseudorandom
+ * RGB values, with a minimum Red value of 0.5 to differentiate it from the background dish.
+ * @returns {[]}            Returns a 2-dimensional array of colours for each bacteria generated. Each nested array
+ *                          contains the colour vertices for a single bacteria in the form [R1, G1, B1, R2, G2, B2, ... , Rn, Gn, Bn]
+ */
 function generateBacteriaColors(){
 
     var bacteriaColors = [];
@@ -176,7 +292,7 @@ function generateBacteriaColors(){
 
 
 /**
- * Utility function to generate the all vertices of a circle. The circle will be drawn using TRIANGLE_STRIP, and so many
+ * Utility function to generate all the vertices of a circle. The circle will be drawn using TRIANGLE_STRIP, and so many
  * triangle vertices are required to form a circle. (We use 360 individual triangles)
  * @returns {[]}
  */
@@ -240,104 +356,6 @@ function generateCircleColors(redIn, greenIn, blueIn){
         // Repeat 360 times around the circle
     }
     return circleColors;
-}
-
-/**
- * Main Draw Function.
- * @param gl
- * @param currentSize
- * @param modelMatrix
- * @param u_ModelMatrix
- * @param bacteriaLocations
- * @param bacteriaColors
- */
-function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, bacteriaColors) {
-    // Adjust the scale of the bacteria every time the function is called:
-    var scale = currentSize;
-
-    // Pass the rotation matrix to the vertex shader
-    gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
-
-    // Clear <canvas>
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // Draw the appropriate shapes
-    drawDish(gl);
-    for (var i = 0; i < bacteriaLocations.length; i+=2){
-        if (bacteriaVisibility[i / 2] === true)
-            drawBacteria(gl, bacteriaLocations[i], bacteriaLocations[i+1], bacteriaColors[i/2], scale);
-
-    }
-
-
-}
-
-/**
- * Function for the drawing of bacteria.
- * @param gl            The WebGL context
- * @param centerX       The center X position of the bacteria being drawn (this should be on the circumference of the back dish)
- * @param centerY       The center y position of the bacteria being drawn (this should also be on the circumference of the dish)
- * @param colorArray    The array of colours
- * @param scale
- */
-function drawBacteria(gl, centerX, centerY, colorArray, scale){
-
-    // Generate colours from the input and vertex locations from generateBacteriaVertices():
-    var bVertices = generateBacteriaVertices(centerX, centerY, scale);
-    var bColors = colorArray; // An array of nested arrays storing colours for each bacteria
-    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
-
-    // Initialize the buffers to prepare for drawing:
-    let n = initVertexBuffers(gl, bVertices, bVertices.length / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, bColors, bColors.length / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the circle.');
-        return;
-    }
-
-    // Draw the bacteria to the screen:
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, bVertices.length / VERTEX_DIMENSIONS);
-
-}
-
-function drawDish(gl){
-    // Generate colours and vertices from the generateCircle*() utility functions:
-    var circleVertices = generateCircleVertices();
-    var circleColors = generateCircleColors(0.2, 0.8, 0.2);
-    //console.log ("CircleVertices.count/VERTEX_DIMENSIONS = " + (circleVertices.length / VERTEX_DIMENSIONS));
-    let n = initVertexBuffers(gl, circleVertices, circleVertices.length / VERTEX_DIMENSIONS);
-    let m = initColorBuffers(gl, circleColors, circleColors.length / COLOUR_DIMENSIONS);
-    if (n < 0 || m < 0) {
-        console.log('Failed to set the positions or colors of the vertices for the circle.');
-        return;
-    }
-
-    // Draw the dish to the screen:
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, circleVertices.length / VERTEX_DIMENSIONS);
-
-
-}
-
-// Last time that this function was called
-var g_last = Date.now();
-
-/**
- * Utility function which is called each tick to animate the growth of the bacteria.
- * @param size          The current size of the bacteria
- * @returns {number}
- */
-function animate(size) {
-    // Calculate the elapsed time
-    var now = Date.now();
-    var elapsed = now - g_last;
-    g_last = now;
-    // Update the current scale of the bacteria (adjusted by the elapsed time)
-    var newSize = size + (SCALE_STEP * elapsed) / 1000.0;
-    // Update the score (adjusted by the elapsed time):
-    playerScore += newSize;
-    document.getElementById("score").innerHTML = (playerScore).toFixed(0);
-    return (newSize %= 360);
-
 }
 
 /**
@@ -460,6 +478,39 @@ function clickHandler(e){
             bacteriaVisibility[i/2] = false;
         }
 
+    }
+
+}
+
+/**
+ * Function to check the win status. This called every frame within the tick() function until the game is won or lost.
+ * @returns {boolean}   Returns FALSE if game is not yet won; TRUE if game has been won.
+ */
+
+function checkWinStatus(){
+
+    if ((bacteriaVisibility.includes(true))){
+        // Then the game is still running: not all the bacteria have been destroyed.
+        // console.log(bacteriaVisibility);
+        return false;
+    }else{
+        console.log("Game over! You won!");
+        document.getElementById('gameMessage').innerHTML = "<i style='color:green; font-size: 14pt'> You've Won! </i> ";
+        return true;
+    }
+
+}
+
+/**
+ * Function to check the loss status and update the message to the user if they have lost.
+ * This is called every frame within the tick() function until the game is won or lost.
+ */
+function checkLossStatus(){
+
+    if (playerScore >= PLAYER_LOSS_SCORE){
+        gameLost = true;
+        alert("Oh no! You've lost!");
+        document.getElementById('gameMessage').innerHTML = "<i style='color:red; font-size: 14pt'> You've Lost! </i> "
     }
 
 }
