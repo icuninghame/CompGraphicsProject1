@@ -38,6 +38,7 @@ var playerScore = 0.0;
 var gamePaused = false;
 var gameLost = false;
 var bacteriaCenters = [];
+var bacteriaVisibility = []; //Index will be set to false if the bacteria is not visible
 var currentBacteriaSize = 0.0; //Distance from center of bacteria to edge (ie. the radius)
 // Set the current starting scale factor for the bacteria
 var currentScale = 0.05;
@@ -76,6 +77,12 @@ function main() {
     // Generate initial locations of bacteria along circumference of dish:
     bacteriaCenters = generateBacteriaStartLocations();
     var bacteriaColors = generateBacteriaColors();
+    // Generate visibility flags for each of the bacteria: (index will be set to FALSE when a bacteria is "destroyed")
+    for (var i = 0; i < bacteriaCenters.length; i+=2){
+        bacteriaVisibility[i/2] = true;
+    }
+
+    console.log(bacteriaVisibility);
 
     // Define the Main Game Loop:
     function tick() {
@@ -256,8 +263,10 @@ function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, ba
 
     // Draw the appropriate shapes
     drawDish(gl);
-    for (var bCount = 0; bCount < bacteriaLocations.length; bCount+=2){
-        drawBacteria(gl, bacteriaLocations[bCount], bacteriaLocations[bCount+1], bacteriaColors[bCount/2], scale);
+    for (var i = 0; i < bacteriaLocations.length; i+=2){
+        if (bacteriaVisibility[i / 2] === true)
+            drawBacteria(gl, bacteriaLocations[i], bacteriaLocations[i+1], bacteriaColors[i/2], scale);
+
     }
 
 
@@ -272,6 +281,7 @@ function draw(gl, currentSize, modelMatrix, u_ModelMatrix, bacteriaLocations, ba
  * @param scale
  */
 function drawBacteria(gl, centerX, centerY, colorArray, scale){
+
     // Generate colours from the input and vertex locations from generateBacteriaVertices():
     var bVertices = generateBacteriaVertices(centerX, centerY, scale);
     var bColors = colorArray; // An array of nested arrays storing colours for each bacteria
@@ -439,6 +449,7 @@ function clickHandler(e){
         if (bacteriaCenters[i].toFixed(1) === cx.toFixed(1)){
             if (bacteriaCenters[i+1].toFixed(1) === cy.toFixed(1)){
                 console.log("Bacteria Center Hit!");
+                bacteriaVisibility[i/2] = false;
             }
         }
 
@@ -446,6 +457,7 @@ function clickHandler(e){
         // (Uses formula for checking whether a point lies within a circle: https://math.stackexchange.com/questions/198764/how-to-know-if-a-point-is-inside-a-circle
         if(Math.sqrt(Math.pow(Math.abs(cx - bacteriaCenters[i]), 2) + Math.pow(Math.abs(cy - bacteriaCenters[i+1]), 2)) < currentBacteriaSize){
             console.log("Bacteria Hit!");
+            bacteriaVisibility[i/2] = false;
         }
 
     }
