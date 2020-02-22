@@ -97,8 +97,10 @@ function init() {
         checkLossStatus();                         // Check if the player has lost
         if (!gameWon && !gameLost)                 // If neither, continue the game loop:
             requestAnimationFrame(tick, canvas);   //   Request that the browser calls tick
-        else                                       // Otherwise:
+        else {                                     // Otherwise:
             gl.clear(gl.COLOR_BUFFER_BIT);         //   Clear the game canvas of all elements and end the loop.
+            canvas.setAttribute('height', 0); // Set the canvas height to 0 to effectively make it invisible
+        }
     }
     //Start the main loop
     tick();
