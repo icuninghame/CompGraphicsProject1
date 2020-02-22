@@ -479,7 +479,6 @@ function clickHandler(e){
         }
 
     }
-
 }
 
 /**
@@ -495,6 +494,7 @@ function checkWinStatus(){
         return false;
     }else{
         console.log("Game over! You won!");
+        gameWon = true;
         document.getElementById('gameMessage').innerHTML = "<i style='color:green; font-size: 14pt'> You've Won! </i> ";
         return true;
     }
@@ -514,3 +514,4 @@ function checkLossStatus(){
     }
 
 }
+
